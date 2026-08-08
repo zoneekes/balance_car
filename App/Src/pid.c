@@ -3,7 +3,7 @@
 #include "mpu6050.h"
 #include <sys/_intsup.h>
 
-#define MED_OFFSET 1.00
+#define MED_OFFSET 0.50
 int encoder_left = 0;//左边电机的速度
 int encoder_right = 0;//右边电机的速度
 
@@ -11,8 +11,8 @@ float pitch=0, roll=0, yaw=0;//姿态角
 short gyro_X, gyro_Y, gyro_Z;//陀螺仪角速度
 short acc_X, acc_Y, acc_Z;//加速度计数据
 
-float vertical_kp, vertical_kd;//直立环PD控制器参数(kp-0~1000, kd-0~10)
-float speed_kp, speed_ki;//速度环PI控制器参数(kp-0~1, ki-kp/200)
+float vertical_kp= 200, vertical_kd = 2.04;//直立环PD控制器参数(kp-0~1000, kd-0~10)
+float speed_kp = 0.6, speed_ki = 0.003;//速度环PI控制器参数(kp-0~1, ki-kp/200)
 float steering_kp, steering_kd;//转向环PD控制器参数
 uint8_t flag_stop;//停止标志位
 
@@ -21,8 +21,8 @@ extern TIM_HandleTypeDef htim4;
 
 //PID控制器参数中间变量
 int vertical_out, speed_out, steering_out,motor_left_out, motor_right_out;
-int target_speed = 0;//目标速度
-int target_angle = 0;//目标角度
+int target_speed ;//目标速度
+int target_angle ;//目标角度
 
 float angle_offset = MED_OFFSET;//平衡时小车的角度值偏移
 

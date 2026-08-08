@@ -38,6 +38,6 @@ typedef struct Image {
   const uint8_t *data; // 图片数据
 } Image;
 
-//extern const Image bilibiliImg;
+
 
 #endif // __FONT_H

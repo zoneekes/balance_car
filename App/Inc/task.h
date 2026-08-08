@@ -9,11 +9,12 @@
 #include "sr04.h"
 #include "motor.h"
 #include "encoder.h"
-
-
+#include "bluetooth.h"
+#include "pid.h"
+#include "font.h"
 
 
 void task_init(void);
 void task_test(void);
-void read_10ms(void);
+
 #endif
