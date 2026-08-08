@@ -9,17 +9,22 @@
 
 void pid_control(void);
 
-/* Handle a command string received via Bluetooth.
-   Supported commands (example formats):
-     V_KP=1.23   -- set vertical_kp
-     V_KD=0.45   -- set vertical_kd
-     S_KP=0.5    -- set speed_kp
-     S_KI=0.01   -- set speed_ki
-     ST_KP=0.2   -- set steering_kp
-     ST_KD=0.02  -- set steering_kd
-     T_SPEED=100 -- set target_speed (int)
-     T_ANGLE=5   -- set target_angle (int)
-   Returns 1 on success, 0 on unrecognized command. */
-int pid_handle_command(const char *cmd);
+/* PID parameters that can be modified at runtime and persisted.
+   Declared extern here so other modules (flash storage, bluetooth) can access them. */
+extern float vertical_kp;
+extern float vertical_kd;
+extern float speed_kp;
+extern float speed_ki;
+extern float steering_kp;
+extern float steering_kd;
+extern int target_speed;
+extern int target_angle;
+
+/* Parse a single command string received via Bluetooth and optionally write a response.
+   cmd: null-terminated input line (no trailing CR/LF required)
+   resp: buffer to receive NUL-terminated response (may be NULL)
+   resp_len: length of resp buffer
+   Returns 1 on success, 0 on failure/unrecognized command. */
+int pid_handle_command(const char *cmd, char *resp, size_t resp_len);
 
 #endif

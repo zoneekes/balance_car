@@ -26,6 +26,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "task.h"
+#include "bluetooth.h"
+#include "flash_storage.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -96,7 +98,11 @@ int main(void)
   MX_TIM4_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  // Load saved PID params from Flash (if present)
+  flash_load_pid_params();
   task_init();
+  // Initialize Bluetooth receive handler (huart3)
+  bluetooth_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */

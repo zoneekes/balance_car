@@ -57,6 +57,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/Src/encoder.c
     App/Src/pid.c
     App/Src/bluetooth.c
+    App/Src/flash_storage.c
 
 
 )
