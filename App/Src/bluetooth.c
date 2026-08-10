@@ -1,6 +1,6 @@
 /*
  * Bluetooth 命令集（通过 huart3 接收）
- * 格式：TEXT 行命令，结尾由蓝牙模块发送空闲中断（通常以 CR/LF 或 \n）触发
+* 格式：文本行命令，通常以 CR/LF 结束（\r\n）。
  *
  * 设置参数（KEY=VALUE）示例：
  *   V_KP=200.0    -- 设置直立环 Kp（允许范围：0.0 .. 1000.0）
@@ -26,12 +26,7 @@
  *   成功：OK KEY=VALUE\r\n 或 OK CMD=FORWARD PWM=1000\r\n
  *   查询返回：V_KP=200.000 V_KD=2.040 ... T_ANGLE=0\r\n
  *   错误：ERR reason\r\n
- *
- * 注意事项：
- * - 本实现使用 strtof、snprintf 等函数，可能增加库体积（在使用 newlib-nano 时注意浮点支持的链接选项）。
- * - 对关键 PID 参数做了上下限检查，且更新时会短暂禁用中断以保证原子性，但仍建议在台架上小幅度逐步调整参数。
- * - 若需要保存配置到 Flash，请实现 SAVE/LOAD 命令并限制写入频率以保护 Flash 寿命。
- */
+*/
 
 #include "bluetooth.h"
 #include "stm32f1xx_hal_uart.h"
@@ -40,44 +35,116 @@
 #include <string.h>
 #include <stdio.h>
 
-// single-byte interrupt receive implementation (more robust)
-static char line_buf[128];
-static uint16_t line_idx = 0;
-static uint8_t rx_byte;
+#define BT_LINE_BUF_SIZE 128
+#define BT_TX_QUEUE_SIZE 4
+#define BT_TX_MAX_LEN 256
 
-void bluetooth_init(void) {
-    // start single-byte interrupt reception on huart3 (Bluetooth)
-    HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+typedef struct {
+   uint16_t len;
+   char data[BT_TX_MAX_LEN];
+} bt_tx_msg_t;
+
+static char line_buf[BT_LINE_BUF_SIZE];
+static volatile uint16_t line_idx = 0;
+static uint8_t rx_byte;
+static bt_tx_msg_t tx_queue[BT_TX_QUEUE_SIZE];
+static volatile uint8_t tx_head = 0;
+static volatile uint8_t tx_tail = 0;
+static volatile uint8_t tx_count = 0;
+static volatile uint8_t tx_busy = 0;
+
+static void bluetooth_enqueue_tx(const char *data, uint16_t len)
+{
+   if (data == NULL || len == 0) {
+       return;
+   }
+   if (len > BT_TX_MAX_LEN - 1) {
+       len = BT_TX_MAX_LEN - 1;
+   }
+
+   __disable_irq();
+   uint8_t next_tail = (tx_tail + 1u) % BT_TX_QUEUE_SIZE;
+   if (next_tail == tx_head) {
+       __enable_irq();
+       return;
+   }
+   memcpy(tx_queue[tx_tail].data, data, len);
+   tx_queue[tx_tail].data[len] = '\0';
+   tx_queue[tx_tail].len = len;
+   tx_tail = next_tail;
+   tx_count++;
+   __enable_irq();
 }
 
-// HAL UART receive complete callback (called on each received byte)
+static void bluetooth_start_tx(void)
+{
+   if (tx_busy || tx_count == 0) {
+       return;
+   }
+
+   tx_busy = 1;
+   HAL_UART_Transmit_IT(&huart3, (uint8_t *)tx_queue[tx_head].data, tx_queue[tx_head].len);
+}
+
+void bluetooth_init(void)
+{
+   line_idx = 0;
+   tx_head = 0;
+   tx_tail = 0;
+   tx_count = 0;
+   tx_busy = 0;
+   HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+}
+
+void bluetooth_poll(void)
+{
+   if (!tx_busy && tx_count > 0) {
+       bluetooth_start_tx();
+   }
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if(huart->Instance == USART3){
-        char c = (char)rx_byte;
-        // append to line buffer if space
-        if(line_idx < sizeof(line_buf)-1){
-            line_buf[line_idx++] = c;
-            // if end of line detected, handle command
-            if(c == '\n'){
-                line_buf[line_idx] = '\0';
-                // trim possible leading/trailing whitespace will be done by handler
-                char resp[256] = {0};
-                int ok = pid_handle_command(line_buf, resp, sizeof(resp));
-                if(resp[0] != '\0'){
-                    HAL_UART_Transmit(&huart3, (uint8_t*)resp, (uint16_t)strlen(resp), 200);
-                } else {
-                    if(ok){ const char *okmsg = "OK\r\n"; HAL_UART_Transmit(&huart3, (uint8_t*)okmsg, (uint16_t)strlen(okmsg), 200); }
-                    else { const char *err = "ERR\r\n"; HAL_UART_Transmit(&huart3, (uint8_t*)err, (uint16_t)strlen(err), 200); }
-                }
-                // reset index for next line
-                line_idx = 0;
-            }
-        } else {
-            // overflow: reset buffer
-            line_idx = 0;
-        }
-        // restart reception for next byte
-        HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
-    }
+   if (huart->Instance == USART3) {
+       char c = (char)rx_byte;
+       if (c == '\r' || c == '\n') {
+           if (line_idx > 0) {
+               line_buf[line_idx] = '\0';
+               char resp[256] = {0};
+               int ok = pid_handle_command(line_buf, resp, sizeof(resp));
+               if (resp[0] != '\0') {
+                   bluetooth_enqueue_tx(resp, (uint16_t)strlen(resp));
+               } else {
+                   if (ok) {
+                       bluetooth_enqueue_tx("OK\r\n", 4);
+                   } else {
+                       bluetooth_enqueue_tx("ERR\r\n", 5);
+                   }
+               }
+           }
+           line_idx = 0;
+       } else {
+           if (line_idx < BT_LINE_BUF_SIZE - 1) {
+               line_buf[line_idx++] = c;
+           } else {
+               line_buf[BT_LINE_BUF_SIZE - 1] = '\0';
+               bluetooth_enqueue_tx("ERR OVF\r\n", 9);
+               line_idx = 0;
+           }
+       }
+
+       HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+   }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+   if (huart->Instance == USART3) {
+       if (tx_count > 0) {
+           tx_head = (tx_head + 1u) % BT_TX_QUEUE_SIZE;
+           tx_count--;
+       }
+       tx_busy = 0;
+       bluetooth_poll();
+   }
 }

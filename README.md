@@ -25,6 +25,15 @@
   - CMD=RIGHT[:pwm]     -- 向右原地转
   - CMD=STOP            -- 停止电机
 
+- 蓝牙控制小车转向/行进示例
+  - 前进：CMD=FORWARD:600\r\n
+  - 后退：CMD=BACKWARD:600\r\n
+  - 左转：CMD=LEFT:500\r\n
+  - 右转：CMD=RIGHT:500\r\n
+  - 停止：CMD=STOP\r\n
+  - 典型序列：先发送 CMD=FORWARD:600\r\n，再发送 CMD=LEFT:500\r\n，最后发送 CMD=STOP\r\n
+  - 建议先用较小 PWM（例如 400~600）进行测试，避免电机突然猛冲
+
 - 持久化（Flash）
   - SAVE           -- 把当前 PID 参数写入 Flash（手动触发以避免频繁擦写）
   - LOAD           -- 从 Flash 读取并应用已保存的参数

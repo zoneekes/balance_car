@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MED_OFFSET 5.24
+#define MED_OFFSET 9.52
 int encoder_left = 0;//左边电机的速度
 int encoder_right = 0;//右边电机的速度
 
@@ -14,8 +14,8 @@ float pitch=0, roll=0, yaw=0;//姿态角
 short gyro_X, gyro_Y, gyro_Z;//陀螺仪角速度
 short acc_X, acc_Y, acc_Z;//加速度计数据
 
-float vertical_kp= 200.0f, vertical_kd = 2.04f;//直立环PD控制器参数(kp-0~1000, kd-0~10)
-float speed_kp , speed_ki ;//速度环PI控制器参数(kp-0~1, ki-kp/200)
+float vertical_kp = 680.0f, vertical_kd = 3.145f;//直立环PD控制器参数(kp-0~1000, kd-0~10)
+float speed_kp = 0.06 , speed_ki;//速度环PI控制器参数(kp-0~1, ki=kp/200)
 float steering_kp = 1.0f, steering_kd = 0.1f;//转向环PD控制器参数
 uint8_t flag_stop;//停止标志位
 
@@ -41,10 +41,11 @@ int vertical_pd_control(float med, float angle, float gyro_p) {
 //速度环PI控制器
 //med:目标速度，encoder_L:左轮编码器速度，encoder_R:右轮编码器速度
 int speed_pi_control(int med, int encoder_L, int encoder_R) {
-    int error = 0;
+    int error;
     static float error_lowout_last,encoder_S;
     static float a=0.7f;
     int error_lowout;
+    speed_ki = speed_kp / 200.0f; //积分系数为比例系数的1/200
     //计算偏差值
     error = (encoder_L + encoder_R) - med;
     //低通滤波
@@ -53,8 +54,8 @@ int speed_pi_control(int med, int encoder_L, int encoder_R) {
     //积分环节
     encoder_S += error_lowout;
     //积分限幅
-    if(encoder_S > 1000) encoder_S = 10000;
-    else if(encoder_S < -1000) encoder_S = -10000;
+    if(encoder_S > 10000) encoder_S = 10000;
+    else if(encoder_S < -10000) encoder_S = -10000;
 
     if(flag_stop == 1) {
         encoder_S = 0;

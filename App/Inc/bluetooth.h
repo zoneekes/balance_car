@@ -5,4 +5,5 @@
 #include "stm32f1xx_it.h"
 
 void bluetooth_init(void);
+void bluetooth_poll(void);
 #endif
